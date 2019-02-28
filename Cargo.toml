@@ -1,0 +1,7 @@
+[package]
+name = "rust-quicktime-experiment"
+version = "0.1.0"
+authors = ["Stanislav Baiduzhyi <baiduzhyi.devel@gmail.com>"]
+edition = "2018"
+
+[dependencies]
