@@ -10,22 +10,28 @@ pub enum Endianness {
     Little,
 }
 
+enum InputData<'f> {
+    File(&'f File),
+    Input(&'f Input<'f>),
+}
+
 pub struct Input<'f> {
-    file: &'f File,
+    input: InputData<'f>,
     offset: u64,
     limit: u64,
     cursor: u64,
 }
 
 impl<'f> Input<'f> {
-    pub fn create(input_file: &File) -> Input {
-        return Input {
-            file: input_file,
+    pub fn create(input_file: &'f File) -> Self {
+        Input {
+            input: InputData::File(input_file),
             offset: 0,
             limit: input_file.metadata().expect("metadata expected").len(),
             cursor: 0,
-        };
+        }
     }
+
     pub fn read_u32(&mut self, bo: &Endianness) -> io::Result<u32> {
         // TODO overflow check
         if self.cursor + 4 >= self.limit {
@@ -34,13 +40,17 @@ impl<'f> Input<'f> {
                 format!("EOF: reading 4 bytes from {}, input length: {}", self.cursor, self.limit)));
         }
         let mut buf: [u8; 4] = [0; 4];
-        self.file.read_exact(&mut buf)?;
+        match self.input {
+            InputData::File(f) => f.read_exact(&mut buf)?,
+            InputData::Input(_) => panic!("not implemented"),
+        };
         self.cursor = self.cursor + 4;
         match bo {
             Endianness::Big => Ok(u32::from_be_bytes(buf)),
             Endianness::Little => Ok(u32::from_le_bytes(buf))
         }
     }
+
     pub fn read_u64(&mut self, bo: &Endianness) -> io::Result<u64> {
         // TODO overflow check
         if self.cursor + 8 >= self.limit {
@@ -49,13 +59,17 @@ impl<'f> Input<'f> {
                 format!("EOF: reading 8 bytes from {}, input length: {}", self.cursor, self.limit)));
         }
         let mut buf: [u8; 8] = [0; 8];
-        self.file.read_exact(&mut buf)?;
+        match self.input {
+            InputData::File(f) => f.read_exact(&mut buf)?,
+            InputData::Input(_) => panic!("not implemented"),
+        };
         self.cursor = self.cursor + 8;
         match bo {
             Endianness::Big => Ok(u64::from_be_bytes(buf)),
             Endianness::Little => Ok(u64::from_le_bytes(buf))
         }
     }
+
     pub fn read_string(&mut self, len: u64) -> io::Result<String> {
         // TODO overflow check
         if self.cursor + len >= self.limit {
@@ -63,7 +77,10 @@ impl<'f> Input<'f> {
                 ErrorKind::UnexpectedEof,
                 format!("EOF: reading {} bytes from {}, input length: {}", len, self.cursor, self.limit)));
         }
-        let mut take_input = self.file.take(len);
+        let mut take_input = match self.input {
+            InputData::File(f) => f.take(len),
+            InputData::Input(_) => panic!("not implemented"),
+        };
         let mut buffer = String::new();
         let read = take_input.read_to_string(&mut buffer)?;
         if (read as u64) < len {
@@ -72,8 +89,9 @@ impl<'f> Input<'f> {
                 "string read result is shorter than expected"));
         }
         self.cursor = self.cursor + len;
-        return Ok(buffer);
+        Ok(buffer)
     }
+
     pub fn seek(&mut self, pos: u64) -> io::Result<()> {
         if pos >= self.limit {
             return Err(io::Error::new(
@@ -81,21 +99,26 @@ impl<'f> Input<'f> {
                 format!("EOF: seeking position {}, input length: {}", pos, self.limit)));
         }
         // TODO overflow check
-        self.file.seek(SeekFrom::Start(self.offset + pos))?;
+        match self.input {
+            InputData::File(f) => f.seek(SeekFrom::Start(self.offset + pos))?,
+            InputData::Input(_) => panic!("not implemented"),
+        };
         self.cursor = pos;
-        return Ok(());
+        Ok(())
     }
+
     pub fn ff(&mut self, len: u64) -> io::Result<()> {
         // TODO maybe implement with SeekFrom::Current?
-        return self.seek(self.cursor + len);
+        self.seek(self.cursor + len)
     }
+
     pub fn section(&mut self, len: u64) -> Input<'f> {
-        return Input {
-            file: self.file,
+        Input {
+            input: self.input,
             offset: self.offset + self.cursor,
             limit: len,
             cursor: 0,
-        };
+        }
     }
 }
 
@@ -138,11 +161,11 @@ impl<'f> Input<'f> {
     }
 
     pub fn quicktime_search_box(&mut self, box_name: &str) -> io::Result<Input> {
-        return self.quicktime_scan_for_box(box_name, None);
+        self.quicktime_scan_for_box(box_name, None)
     }
 
     pub fn quicktime_search_uuid_box(&mut self, box_uuid: (u64, u64)) -> io::Result<Input> {
-        return self.quicktime_scan_for_box(&"uuid", Some(box_uuid));
+        self.quicktime_scan_for_box(&"uuid", Some(box_uuid))
     }
 }
 
@@ -152,5 +175,5 @@ fn main() -> io::Result<()> {
     let mut moov_box = input.quicktime_search_box("moov")?;
     let mut mvhd_box = moov_box.quicktime_search_box("mvhd")?;
     println!("mvhd box found!");
-    return Ok(());
+    Ok(())
 }
