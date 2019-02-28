@@ -26,21 +26,6 @@ impl<'f> Input<'f> {
             cursor: 0,
         };
     }
-    pub fn read_u16(&mut self, bo: &Endianness) -> io::Result<u16> {
-        // TODO overflow check
-        if self.cursor + 2 >= self.limit {
-            return Err(io::Error::new(
-                ErrorKind::UnexpectedEof,
-                format!("EOF: reading 2 bytes from {}, input length: {}", self.cursor, self.limit)));
-        }
-        let mut buf: [u8; 2] = [0; 2];
-        self.file.read_exact(&mut buf)?;
-        self.cursor = self.cursor + 2;
-        match bo {
-            Endianness::Big => Ok(u16::from_be_bytes(buf)),
-            Endianness::Little => Ok(u16::from_le_bytes(buf))
-        }
-    }
     pub fn read_u32(&mut self, bo: &Endianness) -> io::Result<u32> {
         // TODO overflow check
         if self.cursor + 4 >= self.limit {
